@@ -1,4 +1,4 @@
-'use client'
+'use client';
 import Image from 'next/image';
 import { useState, useEffect, useCallback } from 'react';
 import { firestore } from '@/firebase';
@@ -9,10 +9,9 @@ export default function Home() {
   const [inventory, setInventory] = useState([]);
   const [open, setOpen] = useState(false);
   const [customOpen, setCustomOpen] = useState(false);
-  const [customRemoveOpen, setCustomRemoveOpen] = useState(false);
   const [itemName, setItemName] = useState('');
   const [customQuantity, setCustomQuantity] = useState(0);
-  const [customRemoveQuantity, setCustomRemoveQuantity] = useState(0);
+  const [customAction, setCustomAction] = useState('add'); // 'add' or 'remove'
   const [selectedItem, setSelectedItem] = useState('');
 
   const updateInventory = useCallback(async () => {
@@ -33,7 +32,7 @@ export default function Home() {
   }, []);
 
   const addItem = useCallback(async (item, quantity = 1) => {
-    if (!item || quantity <= 0) return; // Validate item and quantity
+    if (!item || quantity <= 0) return;
 
     try {
       const docRef = doc(collection(firestore, 'inventory'), item);
@@ -53,7 +52,7 @@ export default function Home() {
   }, [updateInventory]);
 
   const removeItem = useCallback(async (item, quantity = 1) => {
-    if (!item || quantity <= 0) return; // Validate item and quantity
+    if (!item || quantity <= 0) return;
 
     try {
       const docRef = doc(collection(firestore, 'inventory'), item);
@@ -73,6 +72,15 @@ export default function Home() {
     }
   }, [updateInventory]);
 
+  const deleteItem = useCallback(async (item) => {
+    try {
+      await deleteDoc(doc(collection(firestore, 'inventory'), item));
+      await updateInventory();
+    } catch (error) {
+      console.error("Error deleting item: ", error);
+    }
+  }, [updateInventory]);
+
   useEffect(() => {
     updateInventory();
   }, [updateInventory]);
@@ -82,16 +90,15 @@ export default function Home() {
   const handleCustomOpen = (item) => {
     setSelectedItem(item);
     setCustomOpen(true);
-  }
-  const handleCustomClose = () => setCustomOpen(false);
-  const handleCustomRemoveOpen = (item) => {
-    setSelectedItem(item);
-    setCustomRemoveOpen(true);
-  }
-  const handleCustomRemoveClose = () => setCustomRemoveOpen(false);
+  };
+  const handleCustomClose = () => {
+    setCustomQuantity(0);
+    setCustomAction('add');
+    setCustomOpen(false);
+  };
 
   return (
-    <Box 
+    <Box
       width="100vw"
       height="100vh"
       display="flex"
@@ -99,15 +106,23 @@ export default function Home() {
       justifyContent="center"
       alignItems="center"
       gap={2}
-      style={{ backgroundColor: 'white' }}
+      sx={{
+        backgroundColor: 'gray',
+        padding: '10px',
+        animation: 'backgroundAnimation 12s infinite alternate',
+        '@keyframes backgroundAnimation': {
+          '0%': { backgroundColor: '#4682B4' }, // Steel Blue
+          '100%': { backgroundColor: '#778899' } // Light Slate Gray
+        }
+      }}
     >
       <Modal open={open} onClose={handleClose}>
         <Box
           position="absolute"
           top="50%"
           left="50%"
-          width={400}
-          bgcolor="white"
+          width={{ xs: '90%', sm: 400 }}
+          bgcolor="gray"
           borderRadius="8px"
           boxShadow={24}
           p={4}
@@ -150,8 +165,8 @@ export default function Home() {
           position="absolute"
           top="50%"
           left="50%"
-          width={400}
-          bgcolor="white"
+          width={{ xs: '90%', sm: 400 }}
+          bgcolor="gray"
           borderRadius="8px"
           boxShadow={24}
           p={4}
@@ -162,7 +177,19 @@ export default function Home() {
             transform: "translate(-50%, -50%)"
           }}
         >
-          <Typography variant="h6" textAlign="center">Add custom quantity</Typography>
+          <Typography variant="h6" textAlign="center">Custom Quantity</Typography>
+          <TextField
+            select
+            fullWidth
+            value={customAction}
+            onChange={(e) => setCustomAction(e.target.value)}
+            SelectProps={{
+              native: true,
+            }}
+          >
+            <option value="add">Add</option>
+            <option value="remove">Remove</option>
+          </TextField>
           <Stack width="100%" direction="row" spacing={2}>
             <TextField
               type="number"
@@ -178,58 +205,16 @@ export default function Home() {
               variant='outlined'
               onClick={() => {
                 if (selectedItem && customQuantity > 0) {
-                  addItem(selectedItem, customQuantity);
-                  setCustomQuantity(0);
+                  if (customAction === 'add') {
+                    addItem(selectedItem, customQuantity);
+                  } else {
+                    removeItem(selectedItem, customQuantity);
+                  }
                   handleCustomClose();
                 }
               }}
             >
-              ADD
-            </Button>
-          </Stack>
-        </Box>
-      </Modal>
-
-      <Modal open={customRemoveOpen} onClose={handleCustomRemoveClose}>
-        <Box
-          position="absolute"
-          top="50%"
-          left="50%"
-          width={400}
-          bgcolor="white"
-          borderRadius="8px"
-          boxShadow={24}
-          p={4}
-          display="flex"
-          flexDirection="column"
-          gap={3}
-          sx={{
-            transform: "translate(-50%, -50%)"
-          }}
-        >
-          <Typography variant="h6" textAlign="center">Remove custom quantity</Typography>
-          <Stack width="100%" direction="row" spacing={2}>
-            <TextField
-              type="number"
-              variant="outlined"
-              fullWidth
-              value={customRemoveQuantity}
-              onChange={(e) => {
-                setCustomRemoveQuantity(Number(e.target.value));
-              }}
-              placeholder="Quantity"
-            />
-            <Button
-              variant='outlined'
-              onClick={() => {
-                if (selectedItem && customRemoveQuantity > 0) {
-                  removeItem(selectedItem, customRemoveQuantity);
-                  setCustomRemoveQuantity(0);
-                  handleCustomRemoveClose();
-                }
-              }}
-            >
-              REMOVE
+              {customAction === 'add' ? 'ADD' : 'REMOVE'}
             </Button>
           </Stack>
         </Box>
@@ -238,23 +223,29 @@ export default function Home() {
       <Button
         variant='contained'
         onClick={handleOpen}
-        sx={{ marginBottom: 2 }}
+        sx={{ marginBottom: 2, width: { xs: '100%', sm: 'auto' } }}
       >
         Add New Item
       </Button>
-      <Box width="80%" border='1px solid #333' borderRadius="8px" boxShadow={2}>
+      <Box
+        width={{ xs: '100%', sm: '80%' }}
+        border='1px solid #333'
+        borderRadius="8px"
+        boxShadow={2}
+      >
         <Box
           width="100%"
-          height="100px"
-          bgcolor="lightblue"
+          height={{ xs: '70px', sm: '100px' }}
+          bgcolor="#1E90FF"
           display="flex"
           alignItems="center"
           justifyContent="center"
           borderRadius="8px 8px 0 0"
         >
           <Typography
-            variant='h2'
-            color="#333"
+            variant='h4'
+            color="white"
+            textAlign="center"
           >
             Inventory Items
           </Typography>
@@ -265,39 +256,39 @@ export default function Home() {
           spacing={2}
           overflow="auto"
           p={2}
-          bgcolor="white"
+          bgcolor="gray"
           borderRadius="0 0 8px 8px"
         >
           {inventory.map(({ name, quantity }) => (
             <Box
               key={name}
               width="100%"
-              minHeight="150px"
+              minHeight="120px"
               display="flex"
               alignItems="center"
               justifyContent="space-between"
-              bgcolor="#f0f0f0"
+              bgcolor="#333"
               padding={2}
               borderRadius="8px"
+              flexDirection={{ xs: 'column', sm: 'row' }}
             >
-              <Typography variant="h6" color="#333">
-                {name.charAt(0).toUpperCase() + name.slice(1)}
+              <Typography variant="h6" color="white" textAlign="center">
+                {name.charAt(0).toUpperCase() + name.slice(1)}: {quantity}
               </Typography>
-              <Typography variant="h6" color="#333">
-                {quantity}
-              </Typography>
-              <Stack direction="row" spacing={2}>
-                <Button variant='contained' onClick={() => addItem(name)}>
-                  Add
+              <Stack direction="row" spacing={2} mt={{ xs: 2, sm: 0 }}>
+                <Button
+                  variant='contained'
+                  sx={{ bgcolor: '#1E90FF', '&:hover': { bgcolor: '#1C86EE' } }}
+                  onClick={() => handleCustomOpen(name)}
+                >
+                  Modify
                 </Button>
-                <Button variant='contained' onClick={() => removeItem(name)}>
-                  Remove
-                </Button>
-                <Button variant='contained' onClick={() => handleCustomOpen(name)}>
-                  Custom Add
-                </Button>
-                <Button variant='contained' onClick={() => handleCustomRemoveOpen(name)}>
-                  Custom Remove
+                <Button
+                  variant='contained'
+                  sx={{ bgcolor: '#FF4500', '&:hover': { bgcolor: '#FF6347' } }}
+                  onClick={() => deleteItem(name)}
+                >
+                  Delete
                 </Button>
               </Stack>
             </Box>
